@@ -1,6 +1,5 @@
 import mitt from 'mitt'
 import fromTo from 'mud-from-to'
-// import mergeOptions from 'merge-options-from-dom'
 
 /**
  *
@@ -17,7 +16,7 @@ import fromTo from 'mud-from-to'
  * 									duration: Number // Animation duration
  * 									easing: Function // easing function to apply
  */
-export default class {
+export default class SponExpander {
 	defaults = {
 		activeIndex: null,
 		closeOthers: false,
@@ -46,9 +45,11 @@ export default class {
 		this.$el = el
 		this.panes = []
 		this.current
-		this.options.init && this.initalize()
+		this.options.init && this.init()
 
 		Object.assign(this, mitt())
+
+		return this
 	}
 
 	/**
@@ -64,6 +65,8 @@ export default class {
 			open,
 			name
 		} = this.options
+
+		log(this.$el.querySelectorAll(this.options.selector))
 
 		this.panes = [...this.$el.querySelectorAll(this.options.selector)].map(
 			($button, index) => {
@@ -120,7 +123,7 @@ export default class {
 	 * @return {Expander}
 	 */
 	addEvents = () => {
-		this.panes.forEach($button => {
+		this.panes.forEach(({ $button }) => {
 			$button.addEventListener('click', this.clickHandle)
 			$button.addEventListener('touchstart', this.clickHandle)
 		})
@@ -135,7 +138,7 @@ export default class {
 	 * @return {Expander}
 	 */
 	removeEvents = () => {
-		this.panes.forEach($button => {
+		this.panes.forEach(({ $button }) => {
 			$button.removeEventListener('click', this.clickHandle)
 			$button.removeEventListener('touchstart', this.clickHandle)
 		})
@@ -151,8 +154,11 @@ export default class {
 	 * @param  {HTMLElement} element : the input that's changed
 	 * @return Void
 	 */
-	clickHandle = (event, element) => {
+	clickHandle = event => {
 		event.preventDefault()
+		const element = event.target.hasAttribute('data-accordion-btn')
+			? event.target
+			: event.target.closest('[data-accordion-btn]')
 		const { closeOthers } = this.options
 		const { accordionIndex } = element.dataset
 		const open = element.getAttribute('aria-expanded') === 'true' ? true : false
@@ -256,13 +262,13 @@ export default class {
 	 *
 	 * @return {Expander}
 	 */
-	initalize = () => {
+	init = () => {
+		this.createPanels()
 		this.addEvents()
 		this.$el.setAttribute('role', 'tablist')
 		this.$el.setAttribute('aria-multiselectable', this.options.closeOthers)
-		this.createPanels()
 
-		this.emit('accordion:initalize')
+		//this.emit('accordion:initalize')
 
 		return this
 	}
