@@ -66,7 +66,6 @@ export default class SponExpander {
 			name
 		} = this.options
 
-		log(this.$el.querySelectorAll(this.options.selector))
 
 		this.panes = [...this.$el.querySelectorAll(this.options.selector)].map(
 			($button, index) => {
