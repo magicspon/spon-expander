@@ -53,6 +53,40 @@ export default class SponExpander {
 	}
 
 	/**
+	 * The 'change' event handler
+	 *
+	 * @function clickHandle
+	 * @param  {Object} event : event object
+	 * @param  {HTMLElement} element : the input that's changed
+	 * @return Void
+	 */
+	clickHandle = event => {
+		event.preventDefault()
+		const element = event.target.hasAttribute('data-accordion-btn')
+			? event.target
+			: event.target.closest('[data-accordion-btn]')
+		const { closeOthers } = this.options
+		const { accordionIndex } = element.dataset
+		const item = this.panes[accordionIndex]
+		item.state = item.machine[item.state].CLICK
+
+		const { index } = this.current
+
+		if (closeOthers && this.current && index !== parseInt(accordionIndex)) {
+			this.current.state = this.current.machine[this.current.state].CLICK
+			this.collapse(index)
+		} else {
+			log('now')
+		}
+
+		item.state === 'open'
+			? this.expand(accordionIndex)
+			: this.collapse(accordionIndex)
+
+		this.current = item
+	}
+
+	/**
 	 * Setup panels, add accessibility attributes
 	 *
 	 * @return {void}
@@ -91,9 +125,13 @@ export default class SponExpander {
 					$target,
 					index,
 					open: state,
-					isRunning: false
+					isRunning: false,
+					state: state ? 'open' : 'close',
+					machine: {
+						open: { CLICK: 'close' },
+						close: { CLICK: 'open' }
+					}
 				}
-
 				if (activeIndex === index) {
 					this.current = obj
 				}
@@ -152,33 +190,6 @@ export default class SponExpander {
 	}
 
 	/**
-	 * The 'change' event handler
-	 *
-	 * @function clickHandle
-	 * @param  {Object} event : event object
-	 * @param  {HTMLElement} element : the input that's changed
-	 * @return Void
-	 */
-	clickHandle = event => {
-		event.preventDefault()
-		const element = event.target.hasAttribute('data-accordion-btn')
-			? event.target
-			: event.target.closest('[data-accordion-btn]')
-		const { closeOthers, buttonActiveClass } = this.options
-		const { accordionIndex } = element.dataset
-		const open = element.classList.contains(buttonActiveClass)
-
-		if (closeOthers && this.current) {
-			const { index } = this.current
-
-			if (index !== parseInt(accordionIndex)) this.collapse(index)
-		}
-
-		open === true ? this.collapse(accordionIndex) : this.expand(accordionIndex)
-		this.current = this.panes[accordionIndex]
-	}
-
-	/**
 	 *
 	 * @function expand
 	 * @param  {Number} index : the form to validate
@@ -201,7 +212,7 @@ export default class SponExpander {
 			pane.isRunning = true
 			pane.open = true
 
-			this.emit('accordion:open', pane)
+			this.emit('spon:open', { pane, index, panes: this.panes })
 
 			fromTo(
 				{
@@ -215,7 +226,7 @@ export default class SponExpander {
 				this.onEnd(pane)
 				$button.classList.add(buttonActiveClass)
 				$target.classList.add(contentActiveClass)
-				this.emit('accordion:opened', pane)
+				this.emit('spon:opened', { pane, index, panes: this.panes })
 			})
 		}
 
@@ -243,7 +254,7 @@ export default class SponExpander {
 			$target.style.height = `${height}px`
 			$target.style.willChange = 'height'
 
-			this.emit('accordion:collapse', pane)
+			this.emit('spon:close', { pane, index, panes: this.panes })
 
 			pane.isRunning = true
 			fromTo(
@@ -258,7 +269,7 @@ export default class SponExpander {
 				this.onEnd(pane)
 				$button.classList.remove(buttonActiveClass)
 				$target.classList.remove(contentActiveClass)
-				this.emit('accordion:collapsed', pane)
+				this.emit('spon:closed', { pane, index, panes: this.panes })
 			})
 		}
 
@@ -275,8 +286,6 @@ export default class SponExpander {
 		this.addEvents()
 		this.$el.setAttribute('role', 'tablist')
 		this.$el.setAttribute('aria-multiselectable', this.options.closeOthers)
-
-		//this.emit('accordion:initalize')
 
 		return this
 	}
@@ -304,8 +313,6 @@ export default class SponExpander {
 			$target.classList.remove(contentActiveClass)
 			$target.removeAttribute('style')
 		})
-
-		this.emit('accordion:destroy')
 
 		return this
 	}
