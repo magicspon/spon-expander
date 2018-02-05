@@ -44,7 +44,7 @@ export default class SponExpander {
 		this.options = { ...this.defaults, ...options }
 		this.$el = el
 		this.panes = []
-		this.current
+		this.current = null
 		this.options.init && this.init()
 
 		Object.assign(this, mitt())
@@ -66,7 +66,6 @@ export default class SponExpander {
 			name
 		} = this.options
 
-
 		this.panes = [...this.$el.querySelectorAll(this.options.selector)].map(
 			($button, index) => {
 				$button.setAttribute('data-accordion-index', index)
@@ -86,13 +85,20 @@ export default class SponExpander {
 				$target.setAttribute('aria-labelledby', `${name}-${index}`)
 				$target.setAttribute('aria-hidden', !state)
 				$target.setAttribute('role', 'tabpanel')
-				return {
+
+				const obj = {
 					$button,
 					$target,
 					index,
 					open: state,
 					isRunning: false
 				}
+
+				if (activeIndex === index) {
+					this.current = obj
+				}
+
+				return obj
 			}
 		)
 	}
@@ -158,13 +164,16 @@ export default class SponExpander {
 		const element = event.target.hasAttribute('data-accordion-btn')
 			? event.target
 			: event.target.closest('[data-accordion-btn]')
-		const { closeOthers } = this.options
+		const { closeOthers, buttonActiveClass } = this.options
 		const { accordionIndex } = element.dataset
-		const open = element.getAttribute('aria-expanded') === 'true' ? true : false
+		const open = element.classList.contains(buttonActiveClass)
+
 		if (closeOthers && this.current) {
 			const { index } = this.current
+
 			if (index !== parseInt(accordionIndex)) this.collapse(index)
 		}
+
 		open === true ? this.collapse(accordionIndex) : this.expand(accordionIndex)
 		this.current = this.panes[accordionIndex]
 	}
