@@ -70,13 +70,14 @@ export default class SponExpander {
 		const item = this.panes[accordionIndex]
 		item.state = item.machine[item.state].CLICK
 
-		const { index } = this.current
-
-		if (closeOthers && this.current && index !== parseInt(accordionIndex)) {
+		if (
+			closeOthers &&
+			this.current &&
+			this.current.index !== parseInt(accordionIndex)
+		) {
+			const { index } = this.current
 			this.current.state = this.current.machine[this.current.state].CLICK
 			this.collapse(index)
-		} else {
-			log('now')
 		}
 
 		item.state === 'open'
