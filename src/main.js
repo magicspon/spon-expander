@@ -1,6 +1,22 @@
 import mitt from 'mitt'
 import fromTo from 'mud-from-to'
 
+function debounce(func, wait, immediate) {
+	let timeout
+	return function() {
+		let context = this,
+			args = arguments
+		let later = function() {
+			timeout = null
+			if (!immediate) func.apply(context, args)
+		}
+		let callNow = immediate && !timeout
+		clearTimeout(timeout)
+		timeout = setTimeout(later, wait)
+		if (callNow) func.apply(context, args)
+	}
+}
+
 /**
  *
  * @class Expander
@@ -16,7 +32,7 @@ import fromTo from 'mud-from-to'
  * 									duration: Number // Animation duration
  * 									easing: Function // easing function to apply
  */
-export default class SponExpander {
+export default class Expander {
 	defaults = {
 		activeIndex: null,
 		closeOthers: false,
@@ -60,31 +76,15 @@ export default class SponExpander {
 	 * @param  {HTMLElement} element : the input that's changed
 	 * @return Void
 	 */
-	clickHandle = event => {
+	clickHandle = ($button, event) => {
 		event.preventDefault()
-		const element = event.target.hasAttribute('data-accordion-btn')
-			? event.target
-			: event.target.closest('[data-accordion-btn]')
-		const { closeOthers } = this.options
-		const { accordionIndex } = element.dataset
+		const { accordionIndex } = $button.dataset
 		const item = this.panes[accordionIndex]
 		item.state = item.machine[item.state].CLICK
-
-		if (
-			closeOthers &&
-			this.current &&
-			this.current.index !== parseInt(accordionIndex)
-		) {
-			const { index } = this.current
-			this.current.state = this.current.machine[this.current.state].CLICK
-			this.collapse(index)
-		}
 
 		item.state === 'open'
 			? this.expand(accordionIndex)
 			: this.collapse(accordionIndex)
-
-		this.current = item
 	}
 
 	/**
@@ -142,6 +142,20 @@ export default class SponExpander {
 		)
 	}
 
+	animate = (start, end, $target) => {
+		const { duration, easing } = this.options
+
+		return fromTo(
+			{
+				start,
+				end,
+				duration,
+				easing
+			},
+			v => ($target.style.height = `${v}px`)
+		)
+	}
+
 	/**
 	 * function called after the transition has completed
 	 *
@@ -152,11 +166,9 @@ export default class SponExpander {
 		$target.style.willChange = ''
 		$target.style.height = ''
 		$target.style.display = ''
-		pane.isRunning = false
 		$button.setAttribute('aria-expanded', open)
 		$button.setAttribute('aria-selected', open)
 		$target.setAttribute('aria-hidden', !open)
-
 		return this
 	}
 
@@ -168,8 +180,14 @@ export default class SponExpander {
 	 */
 	addEvents = () => {
 		this.panes.forEach(({ $button }) => {
-			$button.addEventListener('click', this.clickHandle)
-			$button.addEventListener('touchstart', this.clickHandle)
+			$button.addEventListener(
+				'click',
+				debounce(this.clickHandle.bind(this, $button), 150)
+			)
+			$button.addEventListener(
+				'touchstart',
+				this.clickHandle.bind(this, $button)
+			)
 		})
 
 		return this
@@ -198,38 +216,38 @@ export default class SponExpander {
 	 */
 	expand = index => {
 		const pane = this.panes[index]
-		const {
-			duration,
-			easing,
-			buttonActiveClass,
-			contentActiveClass
-		} = this.options
-		if (!pane.isRunning) {
-			const { $target, $button } = pane
-			$target.style.display = 'block'
-			const { height } = $target.getBoundingClientRect()
-			$target.style.height = 0
-			$target.style.willChange = 'height'
-			pane.isRunning = true
-			pane.open = true
 
-			this.emit('spon:open', { pane, index, panes: this.panes })
+		const { buttonActiveClass, contentActiveClass, closeOthers } = this.options
 
-			fromTo(
-				{
-					start: 0,
-					end: Math.round(height),
-					duration: duration,
-					easing: easing
-				},
-				v => ($target.style.height = `${v}px`)
-			).then(() => {
-				this.onEnd(pane)
-				$button.classList.add(buttonActiveClass)
-				$target.classList.add(contentActiveClass)
-				this.emit('spon:opened', { pane, index, panes: this.panes })
-			})
+		const { index: oldIndex } = this.current
+		if (
+			closeOthers &&
+			this.current &&
+			oldIndex !== parseInt(index) &&
+			this.current.open
+		) {
+			this.current.state = this.current.machine[this.current.state].CLICK
+			this.collapse(oldIndex)
 		}
+
+		const { $target, $button } = pane
+		pane.open = true
+		this.current = pane
+		$target.style.display = 'block'
+		$target.style.height = ''
+		const { height } = $target.getBoundingClientRect()
+
+		$target.style.height = 0
+		$target.style.willChange = 'height'
+
+		this.emit('open', { pane, index, panes: this.panes })
+
+		this.animate(0, Math.round(height), $target).then(() => {
+			this.onEnd(pane)
+			$button.classList.add(buttonActiveClass)
+			$target.classList.add(contentActiveClass)
+			this.emit('after:open', { pane, index, panes: this.panes })
+		})
 
 		return this
 	}
@@ -241,39 +259,24 @@ export default class SponExpander {
 	 * @return {Expander}
 	 */
 	collapse = index => {
-		const {
-			duration,
-			easing,
-			buttonActiveClass,
-			contentActiveClass
-		} = this.options
 		const pane = this.panes[index]
-		if (!pane.isRunning) {
-			pane.open = false
-			const { $target, $button } = pane
-			const { height } = $target.getBoundingClientRect()
-			$target.style.height = `${height}px`
-			$target.style.willChange = 'height'
 
-			this.emit('spon:close', { pane, index, panes: this.panes })
+		const { buttonActiveClass, contentActiveClass } = this.options
 
-			pane.isRunning = true
-			fromTo(
-				{
-					start: Math.round(height),
-					end: 0,
-					duration: duration,
-					easing: easing
-				},
-				v => ($target.style.height = `${v}px`)
-			).then(() => {
-				this.onEnd(pane)
-				$button.classList.remove(buttonActiveClass)
-				$target.classList.remove(contentActiveClass)
-				this.emit('spon:closed', { pane, index, panes: this.panes })
-			})
-		}
+		const { $target, $button } = pane
+		pane.open = false
+		const { height } = $target.getBoundingClientRect()
+		$target.style.height = `${height}px`
+		$target.style.willChange = 'height'
 
+		this.emit('close', { pane, index, panes: this.panes })
+
+		this.animate(Math.round(height), 0, $target).then(() => {
+			this.onEnd(pane)
+			$button.classList.remove(buttonActiveClass)
+			$target.classList.remove(contentActiveClass)
+			this.emit('after:close', { pane, index, panes: this.panes })
+		})
 		return this
 	}
 
@@ -313,6 +316,7 @@ export default class SponExpander {
 			$target.removeAttribute('data-enhanced', true)
 			$target.classList.remove(contentActiveClass)
 			$target.removeAttribute('style')
+			this.off('*')
 		})
 
 		return this
